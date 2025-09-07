@@ -19,3 +19,17 @@ Additional Python Best Practices Used in this Project:
 Design Patterns:
 
 - Pythonic API Wrapper: @.claude/Pythonic-API-developer-instruction-CLAUDE.md
+
+Logging Guidelines:
+
+**When to Add Logging:**
+
+- Do NOT add logging to methods that are simple API call wrappers
+- DO add logging to methods that involve multi-step decision-making workflows based on conditions
+- For complex workflow methods, the first log message should typically follow the pattern: "--- ${description of what this function does}"
+
+**Examples:**
+- Simple API wrapper (no logging): `get_git_tag_and_ref()`, `delete_tag()`, `create_tag_on_commit()`
+- Complex workflow (with logging): `put_tag_on_commit()`, `put_release()` - these involve checking conditions, making decisions, and performing different actions based on the results
+
+This approach keeps logs focused on meaningful workflow steps while avoiding noise from simple operations.
