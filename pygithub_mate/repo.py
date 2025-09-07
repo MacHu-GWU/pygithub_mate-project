@@ -215,6 +215,7 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
         self,
         tag_name: str,
         tag_message: str | None = None,
+        create_git_tag_kwargs: dict[str, T.Any] | None = None,
     ) -> "TagAndRef":
         """
         Create a new Git tag and reference pointing to the latest commit on default branch.
@@ -224,6 +225,7 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
 
         :param tag_name: Name for the new Git tag
         :param tag_message: Optional message for the tag (defaults to "Tag {tag_name}")
+        :param create_git_tag_kwargs: Additional keyword arguments for tag creation
 
         :returns: TagAndRef object containing the created Git tag and reference
 
@@ -233,12 +235,15 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
         latest_commit_sha = self.latest_commit_sha_on_default_branch
         if tag_message is None:
             tag_message = f"Tag {tag_name}"
+        if create_git_tag_kwargs is None:
+            create_git_tag_kwargs = {}
         # Create the Git tag object
         tag = self.repo.create_git_tag(
             tag=tag_name,
             message=tag_message,
             object=latest_commit_sha,
             type="commit",
+            **create_git_tag_kwargs,
         )
 
         # Create the Git reference pointing to the tag
@@ -247,3 +252,87 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
             sha=tag.sha,
         )
         return TagAndRef(tag=tag, ref=ref)
+
+    def get_git_release(self, release_name: str) -> T.Optional["GitRelease"]:
+        """
+        Retrieve the GitHub release object for the specified release.
+
+        Attempts to fetch the GitHub release associated with the release name.
+        Returns None if the release doesn't exist.
+
+        :param release_name: Name/tag of the release to retrieve
+
+        :returns: The GitHub release object if it exists, None otherwise
+
+        :raises GithubException: For API errors other than 404 (not found)
+        :raises Exception: For other unexpected errors
+        """
+        try:
+            return self.repo.get_release(release_name)
+        except GithubException as e:
+            if e.status == 404:
+                return None  # Release doesn't exist
+            else:  # pragma: no cover
+                raise e
+        except Exception as e:  # pragma: no cover
+            raise e
+
+    def delete_release(
+        self,
+        release_name: str,
+    ) -> bool:
+        """
+        Delete the existing GitHub release if it exists.
+
+        Attempts to find and delete the GitHub release associated with the specified
+        release name. This is typically called before creating a new release to
+        ensure clean state.
+
+        :param release_name: Name/tag of the release to delete
+
+        :returns: True if a release was found and deleted, False if no release existed
+
+        :raises GithubException: If the deletion fails due to API errors
+        """
+        release = self.get_git_release(release_name)
+        if release is not None:
+            release.delete_release()  # Delete the existing release
+            return True
+        else:
+            return False  # No release to delete
+
+    def create_release(
+        self,
+        tag_name: str,
+        release_name: str,
+        release_message: str | None = None,
+        create_git_release_kwargs: dict[str, T.Any] | None = None,
+    ) -> "GitRelease":
+        """
+        Create a new GitHub release for the specified tag and name.
+
+        Creates a GitHub release associated with the specified tag. The release will use
+        the provided tag name, release name, and release message (with a default if not provided).
+
+        :param tag_name: Name of the Git tag to associate with the release
+        :param release_name: Name for the GitHub release
+        :param release_message: Optional message for the release (defaults to "Release {release_name}")
+        :param create_git_release_kwargs: Additional keyword arguments for release creation
+
+        :returns: The created GitHub release object
+
+        :raises GithubException: If release creation fails (e.g., release already exists)
+
+        Note:
+            The associated tag must exist before creating a release.
+        """
+        if release_message is None:
+            release_message = f"Release {release_name}"
+        if create_git_release_kwargs is None:
+            create_git_release_kwargs = {}
+        return self.repo.create_git_release(
+            tag=tag_name,
+            name=release_name,
+            message=release_message,
+            **create_git_release_kwargs,
+        )
