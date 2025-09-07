@@ -1,0 +1,104 @@
+# -*- coding: utf-8 -*-
+
+"""
+Base classes implementing the command pattern for GitHub operations.
+
+This module provides foundational classes that follow the command pattern design,
+where complex operations are encapsulated within objects that contain all the 
+information needed to execute the operation. Each class acts as a self-contained
+command that can be configured with parameters, executed independently, and 
+provides clear interfaces for logging and error handling.
+
+The command pattern is particularly well-suited for GitHub API operations because:
+
+- It encapsulates API credentials, repository information, and operation parameters
+- It provides consistent logging and error handling across different operations
+- It enables easy testing by allowing dependency injection (like custom printers)
+- It supports caching of expensive resources (like API clients) through properties
+- It makes complex workflows readable by breaking them into discrete, reusable commands
+
+Classes in this module serve as building blocks for more specialized GitHub 
+operations like release management, tag creation, and repository synchronization.
+"""
+
+import typing as T
+import dataclasses
+from functools import cached_property
+
+from func_args.api import BaseFrozenModel, REQ
+from github import Github
+
+from .typehint import T_PRINTER
+
+if T.TYPE_CHECKING:  # pragma: no cover
+    from github.GitRef import GitRef
+    from github.GitTag import GitTag
+
+
+@dataclasses.dataclass(frozen=True)
+class BaseLogger(BaseFrozenModel):
+    """
+    Base logging functionality with configurable output control.
+
+    Provides simple message logging with optional verbosity control and
+    customizable output destination following the command pattern.
+
+    :param verbose: Enable or disable message output
+    :param printer: Function to handle message output (defaults to print)
+    """
+
+    verbose: bool = dataclasses.field(default=True)
+    printer: T_PRINTER = dataclasses.field(default=print)
+
+    def info(self, msg: str):
+        """
+        Log an informational message if verbose mode is enabled.
+
+        :param msg: Message to log
+        """
+        if self.verbose:
+            self.printer(msg)
+
+
+@dataclasses.dataclass(frozen=True)
+class BaseGitHubApiRunner(BaseLogger):
+    """
+    Base class for GitHub API operations with authentication and logging.
+
+    Combines logging capabilities with GitHub API client management.
+    Stores GitHub API configuration as attributes and provides a cached
+    GitHub client instance following the command pattern.
+
+    :param github_kwargs: Configuration parameters for GitHub API client
+    :param data: Additional data storage for derived classes
+    """
+
+    github_kwargs: dict[str, T.Any] = dataclasses.field(default=REQ)
+    data: dict[str, T.Any] = dataclasses.field(default_factory=dict)
+
+    @cached_property
+    def gh(self) -> "Github":
+        """
+        GitHub API client instance.
+
+        :returns: Configured GitHub API client using stored credentials
+        """
+        return Github(**self.github_kwargs)
+
+
+@dataclasses.dataclass(frozen=True)
+class TagAndRef:
+    """
+    A container for holding a Git tag and its corresponding reference.
+    """
+
+    tag: T.Optional["GitTag"] = dataclasses.field(default=None)
+    ref: T.Optional["GitRef"] = dataclasses.field(default=None)
+
+    def exists(self) -> bool:
+        """
+        Check if the Git tag exists.
+
+        :returns: True if tag is not None, False otherwise
+        """
+        return self.tag is not None
