@@ -8,9 +8,11 @@ from func_args.api import BaseFrozenModel, REQ
 from github import Github, GithubException
 
 from .typehint import T_PRINTER
+from .emoji import Emoji
 from .base import (
     BaseGitHubApiRunner,
     TagAndRef,
+    ReleaseAndTagAndRef,
 )
 
 if T.TYPE_CHECKING:
@@ -200,13 +202,16 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
 
         :raises GithubException: If the deletion fails due to API errors other than 404
         """
+        self.info(f"{Emoji.DELETE}Delete tag '{tag_name}' if it exists ...")
         try:
             # Get the tag reference
             ref = self.repo.get_git_ref(f"tags/{tag_name}")
             ref.delete()  # Delete the tag reference
+            self.info("✅Done")
             return True
         except GithubException as e:
             if e.status == 404:
+                self.info("✅Tag does not exist, nothing to delete.")
                 return False  # Tag doesn't exist, nothing to delete
             else:  # pragma: no cover
                 raise e
@@ -230,6 +235,9 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
 
         :returns: TagAndRef object containing the created Git tag and reference
         """
+        self.info(
+            f"{Emoji.CREATE}Create tag '{tag_name}' on commit {self.shorten_sha(commit_sha)} ..."
+        )
         if tag_message is None:
             tag_message = f"Tag {tag_name}"
         if create_git_tag_kwargs is None:
@@ -249,7 +257,7 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
             ref=f"refs/tags/{tag_name}",
             sha=tag.sha,
         )
-
+        self.info("✅Done")
         return TagAndRef(tag=tag, ref=ref)
 
     def create_tag_on_latest_commit_on_default_branch(
@@ -324,15 +332,14 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
         :param tag_message: Optional message for the tag (defaults to "Tag {tag_name}")
         :param create_git_tag_kwargs: Additional keyword arguments for tag creation
         """
+
         def create_tag_on_commit():
-            self.info(f"Create tag on {self.shorten_sha(commit_sha)} ...")
             result = self.create_tag_on_commit(
                 commit_sha=commit_sha,
                 tag_name=tag_name,
                 tag_message=tag_message,
                 create_git_tag_kwargs=create_git_tag_kwargs,
             )
-            self.info("✅Done")
             return result
 
         self.info(f"--- Put tag on commit {self.shorten_sha(commit_sha)} ...")
@@ -369,11 +376,14 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
 
         :raises GithubException: If the deletion fails due to API errors
         """
+        self.info(f"{Emoji.DELETE}Delete release {release_name} ...")
         release = self.get_git_release(release_name)
         if release is not None:
             release.delete_release()  # Delete the existing release
+            self.info("✅Done")
             return True
         else:
+            self.info("✅Release does not exist, nothing to delete.")
             return False  # No release to delete
 
     def create_release(
@@ -401,13 +411,129 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
         Note:
             The associated tag must exist before creating a release.
         """
+        self.info(
+            f"{Emoji.CREATE}Create release '{release_name}' using tag '{tag_name}' ..."
+        )
         if release_message is None:
             release_message = f"Release {release_name}"
         if create_git_release_kwargs is None:
             create_git_release_kwargs = {}
-        return self.repo.create_git_release(
+        release = self.repo.create_git_release(
             tag=tag_name,
             name=release_name,
             message=release_message,
             **create_git_release_kwargs,
         )
+        self.info("✅Done")
+        return release
+
+    def put_release(
+        self,
+        commit_sha: str,
+        tag_name: str,
+        release_name: str,
+        tag_message: str | None = None,
+        release_message: str | None = None,
+        create_git_tag_kwargs: dict[str, T.Any] | None = None,
+        create_git_release_kwargs: dict[str, T.Any] | None = None,
+    ):
+        """
+        Update the GitHub release and tag to point to the latest commit.
+
+        This is the main orchestration method that performs the complete release
+        update workflow:
+
+        1. Check if the current tag points to the latest commit
+        2. If already up-to-date, return without changes
+        3. If not up-to-date:
+           - Clean up existing release and tag
+           - Create new tag pointing to latest commit
+           - Create new release for the tag
+
+
+        # 首先要检测 release 是否存在
+        # 如果存在, 是否已经关联的 tag 和我们预期的一致
+        # 如果不一致, 我们决定报错而不是强制删除, 以防误操作
+
+        Returns:
+            tuple: A 4-tuple containing:
+                - bool: True if update was performed, False if already up-to-date
+                - GitTag or None: The final tag object
+                - GitRef or None: The final tag reference
+                - GitRelease or None: The created release (None if no update needed)
+
+        Raises:
+            GithubException: If any GitHub API operation fails
+
+        Note:
+            This method provides progress output via the configured printer function.
+        """
+
+        def create_tag_on_commit():
+            return self.create_tag_on_commit(
+                commit_sha=commit_sha,
+                tag_name=tag_name,
+                tag_message=tag_message,
+                create_git_tag_kwargs=create_git_tag_kwargs,
+            )
+
+        def put_tag_on_commit():
+            return self.put_tag_on_commit(
+                commit_sha=commit_sha,
+                tag_name=tag_name,
+                tag_message=tag_message,
+                create_git_tag_kwargs=create_git_tag_kwargs,
+            )
+
+        def create_release():
+            self.info("Create new release ...")
+            self.create_release(
+                tag_name=tag_name,
+                release_name=release_name,
+                release_message=release_message,
+                create_git_release_kwargs=create_git_release_kwargs,
+            )
+
+        self.info(f"--- Put release on commit {self.shorten_sha(commit_sha)} ...")
+        self.info("Check if release exists ...")
+        release = self.get_git_release(release_name)
+        if release is None:
+            self.info("Release does not exist.")
+            put_tag_on_commit()
+            create_release()
+        else:
+            self.info("Release already exists.")
+            if release.tag_name != tag_name:
+                raise ValueError(
+                    f"Existing release '{release_name}' has tag '{release.tag_name}', "
+                    f"expected '{tag_name}'. Please resolve the conflict manually.",
+                )
+            else:
+                self.info("Check if tag exists ...")
+                tag_and_ref = self.get_git_tag_and_ref(tag_name)
+                if tag_and_ref.exists():
+                    self.info("Tag already exists.")
+                    self.info("Check if tag points to the desired commit ...")
+                    if tag_and_ref.tag.object.sha == commit_sha:
+                        msg = "🛑Tag already points to the desired commit, no action needed."
+                        self.info(msg)
+                        return ReleaseAndTagAndRef(
+                            release=release,
+                            tag_and_ref=tag_and_ref,
+                        )
+                    else:
+                        sha = self.shorten_sha(tag_and_ref.tag.object.sha)
+                        self.info(f"Tag points to a different commit {sha}.")
+                        # Has to delete the release first before deleting tag
+                        self.delete_release(release_name)
+                        self.delete_tag(tag_name)
+                        tag_and_ref = create_tag_on_commit()
+                        release = create_release()
+                        return ReleaseAndTagAndRef(
+                            release=release,
+                            tag_and_ref=tag_and_ref,
+                        )
+                else:
+                    raise NotImplementedError(
+                        "How could release exists, but tag does not exist?"
+                    )

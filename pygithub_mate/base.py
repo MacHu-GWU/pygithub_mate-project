@@ -33,6 +33,7 @@ from .typehint import T_PRINTER
 if T.TYPE_CHECKING:  # pragma: no cover
     from github.GitRef import GitRef
     from github.GitTag import GitTag
+    from github.GitRelease import GitRelease
 
 
 @dataclasses.dataclass(frozen=True)
@@ -59,16 +60,16 @@ class BaseLogger(BaseFrozenModel):
 
         **When to Add Logging:**
 
-        - **Simple API wrappers**: Do NOT add logging to methods that are just wrappers around 
+        - **Simple API wrappers**: Do NOT add logging to methods that are just wrappers around
           single API calls (e.g., get_git_tag_and_ref, delete_tag, create_tag_on_commit)
-        - **Complex workflows**: DO add logging to methods that involve multi-step decision-making 
+        - **Complex workflows**: DO add logging to methods that involve multi-step decision-making
           and perform different actions based on conditions (e.g., put_tag_on_commit, put_release)
-        - **First log pattern**: For complex workflow methods, the first log message should 
+        - **First log pattern**: For complex workflow methods, the first log message should
           typically follow the pattern: "--- ${description of what this function does}"
 
         **Examples:**
             Complex workflow logging::
-            
+
                 self.info("--- Put tag on commit abcd123 ...")
                 self.info("Check if tag exists ...")
                 self.info("Tag exists.")
@@ -77,7 +78,7 @@ class BaseLogger(BaseFrozenModel):
         :param msg: Message to log to the configured printer function
 
         .. note::
-            This approach keeps logs focused on meaningful workflow steps while avoiding 
+            This approach keeps logs focused on meaningful workflow steps while avoiding
             noise from simple operations.
         """
         if self.verbose:
@@ -124,6 +125,9 @@ class BaseGitHubApiRunner(BaseLogger):
 class TagAndRef:
     """
     A container for holding a Git tag and its corresponding reference.
+
+    :param tag: The Git tag object (or None if it doesn't exist)
+    :param ref: The Git reference object (or None if it doesn't exist)
     """
 
     tag: T.Optional["GitTag"] = dataclasses.field(default=None)
@@ -136,3 +140,22 @@ class TagAndRef:
         :returns: True if tag is not None, False otherwise
         """
         return self.tag is not None
+
+
+@dataclasses.dataclass(frozen=True)
+class ReleaseAndTagAndRef:
+    """
+    A container for holding a GitHub release, its corresponding tag, and reference.
+
+    :param release: The GitHub release object (or None if it doesn't exist)
+    :param tag_and_ref: The TagAndRef object containing the tag and reference
+    """
+
+    release: T.Optional["GitRelease"] = dataclasses.field(default=None)
+    tag_and_ref: "TagAndRef" = dataclasses.field(default=REQ)
+
+    def exists(self) -> bool:
+        """
+        Check if the GitHub release exists.
+        """
+        return self.release is not None
