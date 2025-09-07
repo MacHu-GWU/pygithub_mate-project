@@ -50,7 +50,11 @@ Welcome to ``pygithub_mate`` Documentation
 .. image:: https://pygithub-mate.readthedocs.io/en/latest/_static/pygithub_mate-logo.png
     :target: https://pygithub-mate.readthedocs.io/en/latest/
 
-Documentation for ``pygithub_mate``.
+pygithub_mate is a user-friendly Python library that builds upon PyGithub to provide both simple wrappers and sophisticated workflow automation for GitHub operations. While PyGithub offers comprehensive access to the GitHub API, pygithub_mate focuses on making common tasks more intuitive and reliable through carefully designed abstractions and intelligent workflows.
+
+The library offers two types of functionality: direct API wrappers that simplify common operations like tag and release creation, and advanced workflow methods that handle complex multi-step processes automatically. For example, while creating a simple tag is straightforward, the put_tag_on_commit method intelligently handles scenarios like checking if a tag already exists, whether it points to the correct commit, and automatically cleaning up and recreating tags when necessary.
+
+Built around the command pattern, pygithub_mate encapsulates GitHub operations as self-contained, configurable objects with comprehensive logging and error handling. This design makes it particularly valuable for automation scripts, CI/CD pipelines, and release management workflows where reliability and visibility into the process are essential.
 
 
 .. _install:
