@@ -36,6 +36,7 @@ Import ``pygithub_mate``::
 - :meth:`BaseGitHubRepo.create_tag_on_commit <pygithub_mate.repo.BaseGitHubRepo.create_tag_on_commit>`: Create new Git tag on specific commit.
 - :meth:`BaseGitHubRepo.create_tag_on_latest_commit_on_default_branch <pygithub_mate.repo.BaseGitHubRepo.create_tag_on_latest_commit_on_default_branch>`: Create new Git tag on latest commit of default branch.
 - :meth:`BaseGitHubRepo.put_tag_on_commit <pygithub_mate.repo.BaseGitHubRepo.put_tag_on_commit>`: Ensure Git tag points to specific commit with intelligent workflow.
+- :meth:`BaseGitHubRepo.put_tag_on_latest_commit_on_branch <pygithub_mate.repo.BaseGitHubRepo.put_tag_on_latest_commit_on_branch>`: Ensure Git tag points to latest commit on specified branch.
 - :meth:`BaseGitHubRepo.put_tag_on_latest_commit_on_default_branch <pygithub_mate.repo.BaseGitHubRepo.put_tag_on_latest_commit_on_default_branch>`: Ensure Git tag points to latest commit on default branch.
 
 **Release Operations:**
@@ -44,6 +45,7 @@ Import ``pygithub_mate``::
 - :meth:`BaseGitHubRepo.delete_release <pygithub_mate.repo.BaseGitHubRepo.delete_release>`: Delete existing GitHub release.
 - :meth:`BaseGitHubRepo.create_release <pygithub_mate.repo.BaseGitHubRepo.create_release>`: Create new GitHub release.
 - :meth:`BaseGitHubRepo.put_release <pygithub_mate.repo.BaseGitHubRepo.put_release>`: Ensure GitHub release and tag point to specific commit with comprehensive workflow.
+- :meth:`BaseGitHubRepo.put_release_on_latest_commit_on_branch <pygithub_mate.repo.BaseGitHubRepo.put_release_on_latest_commit_on_branch>`: Ensure GitHub release and tag point to latest commit on specified branch.
 - :meth:`BaseGitHubRepo.put_release_on_latest_commit_on_default_branch <pygithub_mate.repo.BaseGitHubRepo.put_release_on_latest_commit_on_default_branch>`: Ensure GitHub release and tag point to latest commit on default branch.
 - :meth:`BaseGitHubRepo.put_assets_to_release <pygithub_mate.repo.BaseGitHubRepo.put_assets_to_release>`: Upload assets to release with intelligent duplicate handling.
 

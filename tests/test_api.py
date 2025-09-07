@@ -37,10 +37,12 @@ def test():
     _ = api.BaseGitHubRepo.create_tag_on_latest_commit_on_default_branch
     _ = api.BaseGitHubRepo.get_git_release
     _ = api.BaseGitHubRepo.put_tag_on_commit
+    _ = api.BaseGitHubRepo.put_tag_on_latest_commit_on_branch
     _ = api.BaseGitHubRepo.put_tag_on_latest_commit_on_default_branch
     _ = api.BaseGitHubRepo.delete_release
     _ = api.BaseGitHubRepo.create_release
     _ = api.BaseGitHubRepo.put_release
+    _ = api.BaseGitHubRepo.put_release_on_latest_commit_on_branch
     _ = api.BaseGitHubRepo.put_release_on_latest_commit_on_default_branch
     _ = api.BaseGitHubRepo.put_assets_to_release
 

@@ -364,6 +364,30 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
         else:
             return create_tag_on_commit()
 
+    def put_tag_on_latest_commit_on_branch(
+        self,
+        branch_name: str,
+        tag_name: str,
+        tag_message: str | None = None,
+        create_git_tag_kwargs: dict[str, T.Any] | None = None,
+    ) -> "TagAndRef":
+        """
+        Ensure a Git tag points to the latest commit on the specified branch.
+
+        :param branch_name: Name of the branch to get the latest commit from
+        :param tag_name: Name for the Git tag
+        :param tag_message: Optional message for the tag (defaults to "Tag {tag_name}")
+        :param create_git_tag_kwargs: Additional keyword arguments for tag creation
+
+        :returns: TagAndRef object containing the Git tag and reference
+        """
+        return self.put_tag_on_commit(
+            commit_sha=self.get_latest_commit_sha_on_branch(branch_name),
+            tag_name=tag_name,
+            tag_message=tag_message,
+            create_git_tag_kwargs=create_git_tag_kwargs,
+        )
+
     def put_tag_on_latest_commit_on_default_branch(
         self,
         tag_name: str,
@@ -560,6 +584,39 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
                     raise NotImplementedError(
                         "How could release exists, but tag does not exist?"
                     )
+
+    def put_release_on_latest_commit_on_branch(
+        self,
+        branch_name: str,
+        tag_name: str,
+        release_name: str,
+        tag_message: str | None = None,
+        release_message: str | None = None,
+        create_git_tag_kwargs: dict[str, T.Any] | None = None,
+        create_git_release_kwargs: dict[str, T.Any] | None = None,
+    ) -> "ReleaseAndTagAndRef":
+        """
+        Ensure a GitHub release and its associated tag point to the latest commit on the specified branch.
+
+        :param tag_name: Name of the Git tag to create or update
+        :param release_name: Name of the GitHub release to create or update
+        :param branch_name: Name of the branch to get the latest commit from
+        :param tag_message: Optional message for the tag (defaults to "Tag {tag_name}")
+        :param release_message: Optional message for the release (defaults to "Release {release_name}")
+        :param create_git_tag_kwargs: Additional keyword arguments for tag creation
+        :param create_git_release_kwargs: Additional keyword arguments for release creation
+
+        :returns: ReleaseAndTagAndRef object containing the release and tag objects
+        """
+        return self.put_release(
+            commit_sha=self.get_latest_commit_sha_on_branch(branch_name),
+            tag_name=tag_name,
+            release_name=release_name,
+            tag_message=tag_message,
+            release_message=release_message,
+            create_git_tag_kwargs=create_git_tag_kwargs,
+            create_git_release_kwargs=create_git_release_kwargs,
+        )
 
     def put_release_on_latest_commit_on_default_branch(
         self,
