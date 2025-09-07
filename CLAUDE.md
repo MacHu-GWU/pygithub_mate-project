@@ -33,3 +33,7 @@ Logging Guidelines:
 - Complex workflow (with logging): `put_tag_on_commit()`, `put_release()` - these involve checking conditions, making decisions, and performing different actions based on the results
 
 This approach keeps logs focused on meaningful workflow steps while avoiding noise from simple operations.
+
+**Documentation Generation:**
+
+Use `/update-public-apis` slash command to regenerate the Public APIs documentation at docs/source/01-Public-APIs/index.rst
