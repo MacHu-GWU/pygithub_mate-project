@@ -54,10 +54,44 @@ class BaseLogger(BaseFrozenModel):
         """
         Log an informational message if verbose mode is enabled.
 
-        :param msg: Message to log
+        This method provides controlled logging output that can be disabled via the verbose flag.
+        It follows specific guidelines for when and how to log messages in workflow methods.
+
+        **When to Add Logging:**
+
+        - **Simple API wrappers**: Do NOT add logging to methods that are just wrappers around 
+          single API calls (e.g., get_git_tag_and_ref, delete_tag, create_tag_on_commit)
+        - **Complex workflows**: DO add logging to methods that involve multi-step decision-making 
+          and perform different actions based on conditions (e.g., put_tag_on_commit, put_release)
+        - **First log pattern**: For complex workflow methods, the first log message should 
+          typically follow the pattern: "--- ${description of what this function does}"
+
+        **Examples:**
+            Complex workflow logging::
+            
+                self.info("--- Put tag on commit abcd123 ...")
+                self.info("Check if tag exists ...")
+                self.info("Tag exists.")
+                self.info("Check if tag points to the desired commit ...")
+
+        :param msg: Message to log to the configured printer function
+
+        .. note::
+            This approach keeps logs focused on meaningful workflow steps while avoiding 
+            noise from simple operations.
         """
         if self.verbose:
             self.printer(msg)
+
+    def shorten_sha(self, sha: str) -> str:
+        """
+        Shorten a Git SHA to its first 7 characters for display.
+
+        :param sha: Full Git SHA string
+
+        :returns: Shortened SHA (first 7 characters)
+        """
+        return sha[:7]
 
 
 @dataclasses.dataclass(frozen=True)
