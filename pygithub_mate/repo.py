@@ -331,6 +331,8 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
         :param tag_name: Name for the new Git tag
         :param tag_message: Optional message for the tag (defaults to "Tag {tag_name}")
         :param create_git_tag_kwargs: Additional keyword arguments for tag creation
+
+        :returns: TagAndRef object containing the Git tag and reference
         """
 
         def create_tag_on_commit():
@@ -358,6 +360,28 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
                 return create_tag_on_commit()
         else:
             return create_tag_on_commit()
+
+    def put_tag_on_latest_commit_on_default_branch(
+        self,
+        tag_name: str,
+        tag_message: str | None = None,
+        create_git_tag_kwargs: dict[str, T.Any] | None = None,
+    ) -> "TagAndRef":
+        """
+        Ensure a Git tag points to the latest commit on the default branch.
+
+        :param tag_name: Name for the Git tag
+        :param tag_message: Optional message for the tag (defaults to "Tag {tag_name}")
+        :param create_git_tag_kwargs: Additional keyword arguments for tag creation
+
+        :returns: TagAndRef object containing the Git tag and reference
+        """
+        return self.put_tag_on_commit(
+            commit_sha=self.get_latest_commit_sha_on_default_branch(),
+            tag_name=tag_name,
+            tag_message=tag_message,
+            create_git_tag_kwargs=create_git_tag_kwargs,
+        )
 
     def delete_release(
         self,
@@ -408,7 +432,7 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
 
         :raises GithubException: If release creation fails (e.g., release already exists)
 
-        Note:
+        .. note::
             The associated tag must exist before creating a release.
         """
         self.info(
@@ -438,35 +462,31 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
         create_git_release_kwargs: dict[str, T.Any] | None = None,
     ):
         """
-        Update the GitHub release and tag to point to the latest commit.
+        Ensure a GitHub release and its associated tag point to a specific commit.
 
-        This is the main orchestration method that performs the complete release
-        update workflow:
+        This method performs comprehensive release management by coordinating both
+        tag and release operations. It validates consistency between existing releases
+        and tags, and recreates them as needed to ensure they point to the desired commit.
 
-        1. Check if the current tag points to the latest commit
-        2. If already up-to-date, return without changes
-        3. If not up-to-date:
-           - Clean up existing release and tag
-           - Create new tag pointing to latest commit
-           - Create new release for the tag
+        The workflow handles multiple scenarios:
+        - If no release exists: Creates tag and release
+        - If release exists with matching tag: Validates tag points to desired commit
+        - If release exists with different tag: Raises error to prevent conflicts
+        - If tag exists but points elsewhere: Deletes both release and tag, then recreates
 
+        :param commit_sha: SHA of the commit to associate with the release
+        :param tag_name: Name of the Git tag to create or update
+        :param release_name: Name of the GitHub release to create or update
+        :param tag_message: Optional message for the tag (defaults to "Tag {tag_name}")
+        :param release_message: Optional message for the release (defaults to "Release {release_name}")
+        :param create_git_tag_kwargs: Additional keyword arguments for tag creation
+        :param create_git_release_kwargs: Additional keyword arguments for release creation
 
-        # 首先要检测 release 是否存在
-        # 如果存在, 是否已经关联的 tag 和我们预期的一致
-        # 如果不一致, 我们决定报错而不是强制删除, 以防误操作
+        :returns: ReleaseAndTagAndRef object containing the release and tag objects
 
-        Returns:
-            tuple: A 4-tuple containing:
-                - bool: True if update was performed, False if already up-to-date
-                - GitTag or None: The final tag object
-                - GitRef or None: The final tag reference
-                - GitRelease or None: The created release (None if no update needed)
-
-        Raises:
-            GithubException: If any GitHub API operation fails
-
-        Note:
-            This method provides progress output via the configured printer function.
+        :raises ValueError: If existing release has a different tag name than expected
+        :raises GithubException: If any GitHub API operation fails
+        :raises NotImplementedError: If release exists but its associated tag doesn't exist (unexpected state)
         """
 
         def create_tag_on_commit():
@@ -537,3 +557,34 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
                     raise NotImplementedError(
                         "How could release exists, but tag does not exist?"
                     )
+
+    def put_release_on_latest_commit_on_default_branch(
+        self,
+        tag_name: str,
+        release_name: str,
+        tag_message: str | None = None,
+        release_message: str | None = None,
+        create_git_tag_kwargs: dict[str, T.Any] | None = None,
+        create_git_release_kwargs: dict[str, T.Any] | None = None,
+    ) -> "ReleaseAndTagAndRef":
+        """
+        Ensure a GitHub release and its associated tag point to the latest commit on the default branch.
+
+        :param tag_name: Name of the Git tag to create or update
+        :param release_name: Name of the GitHub release to create or update
+        :param tag_message: Optional message for the tag (defaults to "Tag {tag_name}")
+        :param release_message: Optional message for the release (defaults to "Release {release_name}")
+        :param create_git_tag_kwargs: Additional keyword arguments for tag creation
+        :param create_git_release_kwargs: Additional keyword arguments for release creation
+
+        :returns: ReleaseAndTagAndRef object containing the release and tag objects
+        """
+        return self.put_release(
+            commit_sha=self.get_latest_commit_sha_on_default_branch(),
+            tag_name=tag_name,
+            release_name=release_name,
+            tag_message=tag_message,
+            release_message=release_message,
+            create_git_tag_kwargs=create_git_tag_kwargs,
+            create_git_release_kwargs=create_git_release_kwargs,
+        )
