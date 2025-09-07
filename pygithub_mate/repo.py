@@ -21,7 +21,7 @@ if T.TYPE_CHECKING:
 
 
 @dataclasses.dataclass(frozen=True)
-class IsTagLatestOnMainResult:
+class IsTagLatestOnDefaultBranchResult:
     """
     A container for the result of checking if a tag is the latest on the main branch.
 
@@ -48,6 +48,7 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
     :param owner_name: GitHub repository owner/organization name
     :param repo_name: Repository name
     """
+
     owner_name: str = dataclasses.field(default=REQ)
     repo_name: str = dataclasses.field(default=REQ)
 
@@ -149,10 +150,10 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
 
         return TagAndRef(tag=tag, ref=ref)
 
-    def is_tag_latest_on_main(
+    def is_tag_latest_on_default_branch(
         self,
         tag_name: str,
-    ) -> "IsTagLatestOnMainResult":
+    ) -> "IsTagLatestOnDefaultBranchResult":
         """
         Check if the specified tag points to the latest commit on the default branch.
 
@@ -161,7 +162,7 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
 
         :param tag_name: Name of the tag to check
 
-        :returns: IsTagLatestOnMainResult object containing:
+        :returns: IsTagLatestOnDefaultBranchResult object containing:
             - is_latest: True if tag is latest, False otherwise (or if tag doesn't exist)
             - latest_commit_sha: SHA of the latest commit on the default branch
             - tag_and_ref: TagAndRef object containing the Git tag and reference
@@ -171,14 +172,13 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
         """
         latest_commit_sha = self.get_latest_commit_sha_on_default_branch()
         tag_and_ref = self.get_git_tag_and_ref(tag_name)
-
         if tag_and_ref.tag is None:
             # Tag doesn't exist, so it can't be latest
             flag = False
         else:
             # Compare tag's commit SHA with latest commit SHA
             flag = tag_and_ref.tag.object.sha == latest_commit_sha
-        return IsTagLatestOnMainResult(
+        return IsTagLatestOnDefaultBranchResult(
             is_latest=flag,
             latest_commit_sha=latest_commit_sha,
             tag_and_ref=tag_and_ref,
@@ -211,6 +211,47 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
             else:  # pragma: no cover
                 raise e
 
+    def create_tag_on_commit(
+        self,
+        commit_sha: str,
+        tag_name: str,
+        tag_message: str | None = None,
+        create_git_tag_kwargs: dict[str, T.Any] | None = None,
+    ) -> "TagAndRef":
+        """
+        Create a new Git tag and reference pointing to a specific commit.
+
+        Creates both a Git tag object and a Git reference for the specified tag name.
+
+        :param commit_sha: SHA of the commit to tag
+        :param tag_name: Name for the new Git tag
+        :param tag_message: Optional message for the tag (defaults to "Tag {tag_name}")
+        :param create_git_tag_kwargs: Additional keyword arguments for tag creation
+
+        :returns: TagAndRef object containing the created Git tag and reference
+        """
+        if tag_message is None:
+            tag_message = f"Tag {tag_name}"
+        if create_git_tag_kwargs is None:
+            create_git_tag_kwargs = {}
+
+        # Create the Git tag object
+        tag = self.repo.create_git_tag(
+            tag=tag_name,
+            message=tag_message,
+            object=commit_sha,
+            type="commit",
+            **create_git_tag_kwargs,
+        )
+
+        # Create the Git reference pointing to the tag
+        ref = self.repo.create_git_ref(
+            ref=f"refs/tags/{tag_name}",
+            sha=tag.sha,
+        )
+
+        return TagAndRef(tag=tag, ref=ref)
+
     def create_tag_on_latest_commit_on_default_branch(
         self,
         tag_name: str,
@@ -233,25 +274,12 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
         """
         # Use latest commit if none specified
         latest_commit_sha = self.latest_commit_sha_on_default_branch
-        if tag_message is None:
-            tag_message = f"Tag {tag_name}"
-        if create_git_tag_kwargs is None:
-            create_git_tag_kwargs = {}
-        # Create the Git tag object
-        tag = self.repo.create_git_tag(
-            tag=tag_name,
-            message=tag_message,
-            object=latest_commit_sha,
-            type="commit",
-            **create_git_tag_kwargs,
+        return self.create_tag_on_commit(
+            commit_sha=latest_commit_sha,
+            tag_name=tag_name,
+            tag_message=tag_message,
+            create_git_tag_kwargs=create_git_tag_kwargs,
         )
-
-        # Create the Git reference pointing to the tag
-        ref = self.repo.create_git_ref(
-            ref=f"refs/tags/{tag_name}",
-            sha=tag.sha,
-        )
-        return TagAndRef(tag=tag, ref=ref)
 
     def get_git_release(self, release_name: str) -> T.Optional["GitRelease"]:
         """
@@ -276,6 +304,53 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
                 raise e
         except Exception as e:  # pragma: no cover
             raise e
+
+    def put_tag_on_commit(
+        self,
+        commit_sha: str,
+        tag_name: str,
+        tag_message: str | None = None,
+        create_git_tag_kwargs: dict[str, T.Any] | None = None,
+    ) -> "TagAndRef":
+        """
+        Ensure a Git tag points to a specific commit, updating or recreating the tag as needed.
+
+        If the tag exists and already points to the desired commit, no action is taken.
+        If the tag exists but points to a different commit, it is deleted and recreated.
+        If the tag does not exist, it is created.
+
+        :param commit_sha: SHA of the commit to tag
+        :param tag_name: Name for the new Git tag
+        :param tag_message: Optional message for the tag (defaults to "Tag {tag_name}")
+        :param create_git_tag_kwargs: Additional keyword arguments for tag creation
+        """
+        def create_tag_on_commit():
+            self.info(f"Create tag on {self.shorten_sha(commit_sha)} ...")
+            result = self.create_tag_on_commit(
+                commit_sha=commit_sha,
+                tag_name=tag_name,
+                tag_message=tag_message,
+                create_git_tag_kwargs=create_git_tag_kwargs,
+            )
+            self.info("✅Done")
+            return result
+
+        self.info(f"--- Put tag on commit {self.shorten_sha(commit_sha)} ...")
+        self.info("Check if tag exists ...")
+        tag_and_ref = self.get_git_tag_and_ref(tag_name)
+        if tag_and_ref.exists():
+            self.info("Tag exists.")
+            self.info("Check if tag points to the desired commit ...")
+            if tag_and_ref.tag.object.sha == commit_sha:
+                msg = "🛑Tag already points to the desired commit, no action needed."
+                self.info(msg)
+                return tag_and_ref
+            else:
+                self.info("Tag points to a different commit, deleting existing tag ...")
+                self.delete_tag(tag_name)
+                return create_tag_on_commit()
+        else:
+            return create_tag_on_commit()
 
     def delete_release(
         self,
