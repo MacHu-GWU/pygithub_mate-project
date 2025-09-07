@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 
 import typing as T
+import os
 import dataclasses
+from pathlib import Path
 from functools import cached_property
 
-from func_args.api import BaseFrozenModel, REQ
-from github import Github, GithubException
+from func_args.api import REQ
+from github import GithubException
 
-from .typehint import T_PRINTER
 from .emoji import Emoji
+from .utils import calculate_sha256
 from .base import (
     BaseGitHubApiRunner,
     TagAndRef,
@@ -20,6 +22,7 @@ if T.TYPE_CHECKING:
     from github.GitRef import GitRef
     from github.GitTag import GitTag
     from github.GitRelease import GitRelease
+    from github.GitReleaseAsset import GitReleaseAsset
 
 
 @dataclasses.dataclass(frozen=True)
@@ -588,3 +591,36 @@ class BaseGitHubRepo(BaseGitHubApiRunner):
             create_git_tag_kwargs=create_git_tag_kwargs,
             create_git_release_kwargs=create_git_release_kwargs,
         )
+
+    def put_assets_to_release(
+        self,
+        release: "GitRelease",
+        path_to_name_mapping: dict["os.PathLike", str],
+    ):
+        """
+        Upload assets to a release, replacing any existing assets with the same names only if their SHA-256 digest differs.
+
+        For each asset name, if an asset already exists in the release:
+
+        - The existing asset is deleted and replaced only if the SHA-256 digest of the new file is different.
+        - If the digest matches, the asset is not re-uploaded.
+
+        If the asset does not exist, it is uploaded.
+
+        :param release: The GitHub release object to upload assets to
+        :param path_to_name_mapping: A mapping of file paths to asset names for upload
+        """
+        existing_assets: dict[str, GitReleaseAsset] = {
+            asset.name: asset for asset in release.get_assets()
+        }
+        for path, name in path_to_name_mapping.items():
+            if name in existing_assets:
+                asset = existing_assets[name]
+                sha = f"sha256:{calculate_sha256(Path(path))}"
+                if asset.digest != sha:
+                    existing_assets[name].delete_asset()
+                    release.upload_asset(path=str(Path(path)), label=name)
+                else:
+                    pass
+            else:
+                release.upload_asset(path=str(Path(path)), label=name)
